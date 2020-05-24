@@ -27,7 +27,7 @@ setup(
     packages=find_packages(),
     install_requires=["beautifulsoup4", "lxml",],
     classifiers=[
-        "Development Status :: 1 - Alpha",
+        "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: MIT License",
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",
