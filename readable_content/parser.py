@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 
 from bs4 import BeautifulSoup
+from lxml import etree as ET
 from lxml.html import fromstring
 
 
@@ -66,11 +67,10 @@ class ContentParser:
         self.content = self.grab_article()
 
     def get_content(self):
-        response = fromstring(self.content)
-        content = ""
-        for i in response.iterdescendants():
-            content += "".join([each.strip() for each in i.xpath("text()")])
-        return content
+        html_string = ET.tostring(fromstring(self.content)).decode("utf-8")
+        text_only = re.sub(re.compile(r"<.*?>"), "", html_string)
+        cleaned_text = text_only.replace("\n\n", " ").replace("\n", " ")
+        return cleaned_text.strip()
 
     def remove_script(self):
         for elem in self.html.findAll("script"):
@@ -229,7 +229,7 @@ class ContentParser:
                 p = len(node.findAll("p"))
                 img = len(node.findAll("img"))
                 li = len(node.findAll("li")) - 100
-                input = len(node.findAll("input"))
+                _input = len(node.findAll("input"))
                 embed_count = 0
                 embeds = node.findAll("embed")
                 for embed in embeds:
@@ -243,7 +243,7 @@ class ContentParser:
                     to_remove = True
                 elif li > p and tag != "ul" and tag != "ol":
                     to_remove = True
-                elif input > math.floor(p / 3):
+                elif _input > math.floor(p / 3):
                     to_remove = True
                 elif content_length < 25 and (img == 0 or img > 2):
                     to_remove = True
@@ -334,9 +334,3 @@ class ContentParser:
                     )
                 )
                 img["src"] = new_src
-
-
-if __name__ == "__main__":
-    p = ContentParser("https://ideas.ted.com/how-do-animals-learn-how-to-be-well-animals-through-a-shared-culture/")
-    content = p.get_content()
-    print(content)
