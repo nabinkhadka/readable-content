@@ -1,22 +1,14 @@
-# coding=utf-8
-
-from __future__ import division
-import os
-import sys
-import urllib.request
-import urllib.parse
-import re
-from html.parser import HTMLParser
 import math
-from lxml.html import fromstring
 import posixpath
+import re
+import urllib.parse
+import urllib.request
 
-import chardet
 from bs4 import BeautifulSoup
+from lxml.html import fromstring
 
 
-class ReadableContentParser:
-
+class ContentParser:
     regexps = {
         "unlikelyCandidates": re.compile(
             "combx|comment|community|disqus|extra|foot|header|menu|"
@@ -59,18 +51,13 @@ class ReadableContentParser:
 
     def __init__(self, url, html=None):
         self.candidates = {}
+        self.input = html
         if html is None:
-            input = urllib.request.urlopen(url).read().decode("utf-8")
-        else:
-            input = html
-        self.input = input
+            self.input = urllib.request.urlopen(url).read().decode("utf-8")
         self.url = url
         self.input = self.regexps["replaceBrs"].sub("</p><p>", self.input)
         self.input = self.regexps["replaceFonts"].sub("<\g<1>span>", self.input)
         self.html = BeautifulSoup(self.input)
-
-        #        print self.html.originalEncoding
-        #        print self.html
         self.remove_script()
         self.remove_style()
         self.remove_link()
@@ -100,94 +87,75 @@ class ReadableContentParser:
     def grab_article(self):
 
         for elem in self.html.findAll(True):
-            # import pdb; pdb.set_trace()
-            unlikelyMatchString = " ".join(elem.get("id", "")) + " ".join(
+            unlikely_match_string = " ".join(elem.get("id", "")) + " ".join(
                 elem.get("class", "")
             )
 
             if (
-                self.regexps["unlikelyCandidates"].search(unlikelyMatchString)
-                and not self.regexps["okMaybeItsACandidate"].search(unlikelyMatchString)
+                self.regexps["unlikelyCandidates"].search(unlikely_match_string)
+                and not self.regexps["okMaybeItsACandidate"].search(
+                    unlikely_match_string
+                )
                 and elem.name != "body"
             ):
-                #                print elem
-                #                print '--------------------'
                 elem.extract()
                 continue
-            #                pass
 
             if elem.name == "div":
                 s = elem.renderContents().decode("utf-8")
-                # import pdb; pdb.set_trace()
                 if not self.regexps["divToPElements"].search(s):
                     elem.name = "p"
 
         for node in self.html.findAll("p"):
 
-            parentNode = node.parent
-            grandParentNode = parentNode.parent
-            innerText = node.text
+            parent_node = node.parent
+            grand_parent_node = parent_node.parent
+            inner_text = node.text
 
-            #            print '=================='
-            #            print node
-            #            print '------------------'
-            #            print parentNode
-
-            if not parentNode or len(innerText) < 20:
+            if not parent_node or len(inner_text) < 20:
                 continue
 
-            parentHash = hash(str(parentNode))
-            grandParentHash = hash(str(grandParentNode))
+            parent_hash = hash(str(parent_node))
+            grand_parent_hash = hash(str(grand_parent_node))
 
-            if parentHash not in self.candidates:
-                self.candidates[parentHash] = self.initialize_node(parentNode)
+            if parent_hash not in self.candidates:
+                self.candidates[parent_hash] = self.initialize_node(parent_node)
 
-            if grandParentNode and grandParentHash not in self.candidates:
-                self.candidates[grandParentHash] = self.initialize_node(grandParentNode)
+            if grand_parent_node and grand_parent_hash not in self.candidates:
+                self.candidates[grand_parent_hash] = self.initialize_node(
+                    grand_parent_node
+                )
 
-            contentScore = 1
-            contentScore += innerText.count(",")
-            contentScore += innerText.count(u"，")
-            contentScore += min(math.floor(len(innerText) / 100), 3)
+            content_score = 1
+            content_score += inner_text.count(",")
+            content_score += inner_text.count(u"，")
+            content_score += min(math.floor(len(inner_text) / 100), 3)
 
-            self.candidates[parentHash]["score"] += contentScore
+            self.candidates[parent_hash]["score"] += content_score
+            if grand_parent_node:
+                self.candidates[grand_parent_hash]["score"] += content_score / 2
 
-            #            print '======================='
-            #            print self.candidates[parentHash]['score']
-            #            print self.candidates[parentHash]['node']
-            #            print '-----------------------'
-            #            print node
-
-            if grandParentNode:
-                self.candidates[grandParentHash]["score"] += contentScore / 2
-
-        topCandidate = None
+        top_candidate = None
 
         for key in self.candidates:
-            #            print '======================='
-            #            print self.candidates[key]['score']
-            #            print self.candidates[key]['node']
-
             self.candidates[key]["score"] = self.candidates[key]["score"] * (
                 1 - self.get_link_density(self.candidates[key]["node"])
             )
 
             if (
-                not topCandidate
-                or self.candidates[key]["score"] > topCandidate["score"]
+                not top_candidate
+                or self.candidates[key]["score"] > top_candidate["score"]
             ):
-                topCandidate = self.candidates[key]
+                top_candidate = self.candidates[key]
 
         content = ""
 
-        if topCandidate:
-            content = topCandidate["node"]
-            #            print content
+        if top_candidate:
+            content = top_candidate["node"]
             content = self.clean_article(content)
         return content
 
     def clean_article(self, content):
-
         self.clean_style(content)
         self.clean(content, "h1")
         self.clean(content, "object")
@@ -211,27 +179,27 @@ class ReadableContentParser:
 
     def clean(self, e, tag):
 
-        targetList = e.findAll(tag)
-        isEmbed = 0
+        target_list = e.findAll(tag)
+        is_embed = 0
         if tag == "object" or tag == "embed":
-            isEmbed = 1
+            is_embed = 1
 
-        for target in targetList:
-            attributeValues = ""
+        for target in target_list:
+            attribute_values = ""
             for attribute in target.attrs:
                 try:
                     # import pdb;pdb.set_trace()
-                    attributeValues += target[attribute]
+                    attribute_values += target[attribute]
                 except KeyError:
                     import pdb
 
                     pdb.set_trace()
                     print("")
 
-            if isEmbed and self.regexps["videos"].search(attributeValues):
+            if is_embed and self.regexps["videos"].search(attribute_values):
                 continue
 
-            if isEmbed and self.regexps["videos"].search(
+            if is_embed and self.regexps["videos"].search(
                 target.renderContents(encoding=None)
             ):
                 continue
@@ -245,48 +213,48 @@ class ReadableContentParser:
             del elem["style"]
 
     def clean_conditionally(self, e, tag):
-        tagsList = e.findAll(tag)
+        tags_list = e.findAll(tag)
 
-        for node in tagsList:
+        for node in tags_list:
             weight = self.get_class_weight(node)
-            hashNode = hash(str(node))
-            if hashNode in self.candidates:
-                contentScore = self.candidates[hashNode]["score"]
+            hash_node = hash(str(node))
+            if hash_node in self.candidates:
+                content_score = self.candidates[hash_node]["score"]
             else:
-                contentScore = 0
+                content_score = 0
 
-            if weight + contentScore < 0:
+            if weight + content_score < 0:
                 node.extract()
             else:
                 p = len(node.findAll("p"))
                 img = len(node.findAll("img"))
                 li = len(node.findAll("li")) - 100
                 input = len(node.findAll("input"))
-                embedCount = 0
+                embed_count = 0
                 embeds = node.findAll("embed")
                 for embed in embeds:
                     if not self.regexps["videos"].search(embed["src"]):
-                        embedCount += 1
-                linkDensity = self.get_link_density(node)
-                contentLength = len(node.text)
-                toRemove = False
+                        embed_count += 1
+                link_density = self.get_link_density(node)
+                content_length = len(node.text)
+                to_remove = False
 
                 if img > p:
-                    toRemove = True
+                    to_remove = True
                 elif li > p and tag != "ul" and tag != "ol":
-                    toRemove = True
+                    to_remove = True
                 elif input > math.floor(p / 3):
-                    toRemove = True
-                elif contentLength < 25 and (img == 0 or img > 2):
-                    toRemove = True
-                elif weight < 25 and linkDensity > 0.2:
-                    toRemove = True
-                elif weight >= 25 and linkDensity > 0.5:
-                    toRemove = True
-                elif (embedCount == 1 and contentLength < 35) or embedCount > 1:
-                    toRemove = True
+                    to_remove = True
+                elif content_length < 25 and (img == 0 or img > 2):
+                    to_remove = True
+                elif weight < 25 and link_density > 0.2:
+                    to_remove = True
+                elif weight >= 25 and link_density > 0.5:
+                    to_remove = True
+                elif (embed_count == 1 and content_length < 35) or embed_count > 1:
+                    to_remove = True
 
-                if toRemove:
+                if to_remove:
                     node.extract()
 
     def get_article_title(self):
@@ -299,20 +267,20 @@ class ReadableContentParser:
         return title
 
     def initialize_node(self, node):
-        contentScore = 0
+        content_score = 0
 
         if node.name == "div":
-            contentScore += 5
+            content_score += 5
         elif node.name == "blockquote":
-            contentScore += 3
+            content_score += 3
         elif node.name == "form":
-            contentScore -= 3
+            content_score -= 3
         elif node.name == "th":
-            contentScore -= 5
+            content_score -= 5
 
-        contentScore += self.get_class_weight(node)
+        content_score += self.get_class_weight(node)
 
-        return {"score": contentScore, "node": node}
+        return {"score": content_score, "node": node}
 
     def get_class_weight(self, node):
         weight = 0
@@ -332,15 +300,15 @@ class ReadableContentParser:
 
     def get_link_density(self, node):
         links = node.findAll("a")
-        textLength = len(node.text)
+        text_length = len(node.text)
 
-        if textLength == 0:
+        if text_length == 0:
             return 0
-        linkLength = 0
+        link_length = 0
         for link in links:
-            linkLength += len(link.text)
+            link_length += len(link.text)
 
-        return linkLength / textLength
+        return link_length / text_length
 
     def fix_images_path(self, node):
         imgs = node.findAll("img")
@@ -351,18 +319,24 @@ class ReadableContentParser:
                 continue
 
             if "http://" != src[:7] and "https://" != src[:8]:
-                newSrc = urllib.parse.urljoin(self.url, src)
+                new_src = urllib.parse.urljoin(self.url, src)
 
-                newSrcArr = urllib.parse.urlparse(newSrc)
-                newPath = posixpath.normpath(newSrcArr[2])
-                newSrc = urllib.parse.urlunparse(
+                new_src_arr = urllib.parse.urlparse(new_src)
+                new_path = posixpath.normpath(new_src_arr[2])
+                new_src = urllib.parse.urlunparse(
                     (
-                        newSrcArr.scheme,
-                        newSrcArr.netloc,
-                        newPath,
-                        newSrcArr.params,
-                        newSrcArr.query,
-                        newSrcArr.fragment,
+                        new_src_arr.scheme,
+                        new_src_arr.netloc,
+                        new_path,
+                        new_src_arr.params,
+                        new_src_arr.query,
+                        new_src_arr.fragment,
                     )
                 )
-                img["src"] = newSrc
+                img["src"] = new_src
+
+
+if __name__ == "__main__":
+    p = ContentParser("https://ideas.ted.com/how-do-animals-learn-how-to-be-well-animals-through-a-shared-culture/")
+    content = p.get_content()
+    print(content)
