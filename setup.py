@@ -5,9 +5,7 @@ from setuptools import setup, find_packages
 
 
 def get_version():
-    fn = os.path.join(os.path.dirname(__file__), "VERSION")
-    with open(fn) as f:
-        return f.read().split("\n")[0]
+    return "0.1.0"
 
 
 def get_long_description():
