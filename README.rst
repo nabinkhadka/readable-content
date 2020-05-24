@@ -1,6 +1,6 @@
 readable-content
 ============================
-Collects actual content of any article, blog, news, etc.
+Collects actual content of any article, blog, news, etc. This project may not give perfect readable result depending upon way any webpage is structured, but it should work pretty well. This was created to prepare data for NLP work.
 
 
 Installation
