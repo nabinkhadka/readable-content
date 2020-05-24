@@ -30,5 +30,8 @@ In case the website does not allow getting the content and throws 4XX or 3XX or 
 
 Here html_content variable is string representation of the HTML.
 
+Python migration and features added on existing work_.
+
+.. _work:  https://github.com/kingwkb/readability
 
 Thank you!
