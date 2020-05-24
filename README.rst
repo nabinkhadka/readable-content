@@ -25,7 +25,7 @@ After installing you need to do just add following two variables in settings.py 
 In case the website does not allow getting the content and throws 4XX or 3XX or any other error codes, we can first get the HTML using other techniques like using requests, using user-agent, applying proxies on your own, etc. Then the html content can be passed as following::
 
 
-    parser = ContentParser("https://ideas.ted.com/how-do-animals-learn-how-to-be-well-animals-through-a-shared-culture/", html_content)
+    parser = ContentParser("https://some_url.com", html_content)
 
 
 Here html_content variable is string representation of the HTML.
